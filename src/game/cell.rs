@@ -95,6 +95,10 @@ impl Display for Cell {
             return write!(f, " {} ", num);
         }
 
+        if self.exploded {
+            return write!(f, "💥 ");
+        }
+
         write!(f, "💣 ")
     }
 }
@@ -113,6 +117,121 @@ impl std::fmt::Debug for Cell {
             return write!(f, " {} ", num);
         }
 
+        if self.exploded {
+            return write!(f, "💥 ");
+        }
+
         write!(f, "💣 ")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_renders_an_empty_cell() {
+        // arrange
+        let mut cell = Cell::new();
+        cell.show();
+
+        // act
+        let res = format!("{}", cell);
+
+        // assert
+        assert!(cell.is_shown());
+        assert_eq!("⬜ ", res);
+    }
+
+    #[test]
+    fn it_renders_a_flag() {
+        // arrange
+        let mut cell = Cell::new();
+        cell.toggle_flag();
+
+        // act
+        let res = format!("{}", cell);
+
+        // assert
+        assert!(cell.is_flagged());
+        assert_eq!("🏳 ", res);
+    }
+
+    #[test]
+    fn it_renders_a_hidden_cell() {
+        // arrange
+        let cell = Cell::new();
+
+        // act
+        let res = format!("{}", cell);
+
+        // assert
+        assert!(!cell.is_shown());
+        assert_eq!("🟧 ", res);
+    }
+
+    #[test]
+    fn it_renders_a_number() {
+        // arrange
+        let mut cell = Cell::new();
+        cell.inc_bombs_around();
+        cell.inc_bombs_around();
+        cell.inc_bombs_around();
+        cell.show();
+
+        // act
+        let res = format!("{}", cell);
+
+        // assert
+        assert!(cell.is_shown());
+        assert_eq!(3, cell.bombs_around());
+        assert_eq!(" 3 ", res);
+    }
+
+    #[test]
+    fn it_renders_a_bomb() {
+        // arrange
+        let mut cell = Cell::new();
+        cell.plant_bomb();
+        cell.show();
+
+        // act
+        let res = format!("{}", cell);
+
+        // assert
+        assert!(cell.is_shown());
+        assert!(cell.is_mined());
+        assert_eq!("💣 ", res);
+    }
+
+    #[test]
+    fn it_renders_an_exploded_bomb() {
+        // arrange
+        let mut cell = Cell::new();
+        cell.plant_bomb();
+        cell.explode();
+        cell.show();
+
+        // act
+        let res = format!("{}", cell);
+
+        // assert
+        assert!(cell.is_mined());
+        assert!(cell.is_exploded());
+        assert!(cell.is_shown());
+        assert_eq!("💥 ", res);
+    }
+
+    #[test]
+    fn it_creates_a_default_instance() {
+        // act
+        let cell = Cell::default();
+
+        // assert
+        assert!(!cell.is_exploded());
+        assert!(!cell.is_shown());
+        assert!(!cell.is_mined());
+        assert!(!cell.is_flagged());
+        assert_eq!(0, cell.bombs_around());
     }
 }
