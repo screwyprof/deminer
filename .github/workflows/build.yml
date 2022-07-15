@@ -1,4 +1,4 @@
-name: Rust
+name: Build
 on: [push, pull_request]
 
 env:
@@ -10,9 +10,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+
+    - name: Cache dependencies
+      uses: Swatinem/rust-cache@v1
+
     - name: Build
       run: cargo build --verbose
-    - name: Lint
-      run: cargo clippy
-    - name: Run tests
-      run: cargo test --verbose
