@@ -47,10 +47,11 @@ impl Cell {
     }
 
     pub fn bombs_around(&self) -> u8 {
-        match self.value {
-            CellValue::BombsAround(num) => num,
-            _ => 0,
+        if let CellValue::BombsAround(num) = self.value {
+            return num;
         }
+
+        0
     }
 
     pub fn show(&mut self) {

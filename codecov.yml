@@ -1,2 +1,15 @@
 ignore:
   - "src/main.rs"
+
+coverage:
+  precision: 2
+  round: nearest
+
+  status:
+    patch: on
+    project:
+      default:
+        target: 90%
+
+comment:
+  behavior: default

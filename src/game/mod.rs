@@ -17,6 +17,7 @@ pub struct Game {
     cols: u8,
     bombs: u8,
     cells: HashMap<Pos, Cell>,
+    has_lost: bool,
 }
 
 impl Game {
@@ -34,6 +35,7 @@ impl Game {
             cols,
             bombs,
             cells,
+            has_lost: false,
         }
     }
 
@@ -65,52 +67,40 @@ impl Game {
     }
 
     pub fn toggle_flag(&mut self, pos: Pos) -> Status {
-        let cell = self.cell(pos);
+        let cell = self.cell_mut(pos);
         if cell.is_shown() {
-            return self.status(cell);
+            return self.status();
         }
 
-        let cell = self.cell_mut(pos);
         cell.toggle_flag();
 
-        let cell = *cell;
-        self.status(&cell)
+        self.status()
     }
 
     pub fn open(&mut self, pos: Pos) -> Status {
-        let cell = self.cell(pos);
-        if cell.is_shown() {
-            return self.status(cell);
-        }
-
-        if cell.is_flagged() {
-            return self.status(cell);
-        }
-
-        let cell = self.show_cell(pos);
-
-        let cell = *cell;
-        self.status(&cell)
-    }
-
-    fn show_cell(&mut self, pos: Pos) -> &Cell {
         let cell = self.cell_mut(pos);
+        if cell.is_shown() || cell.is_flagged() {
+            return self.status();
+        }
 
         if cell.is_mined() {
             cell.explode();
             cell.show();
+
+            self.has_lost = true;
         }
 
-        self.flood_fill((pos.0 as i8, pos.1 as i8));
+        self.sweep_mine((pos.0 as i8, pos.1 as i8));
 
-        self.cell(pos)
+        self.status()
     }
 
-    fn flood_fill(&mut self, (x, y): (i8, i8)) {
+    fn sweep_mine(&mut self, (x, y): (i8, i8)) {
         let rows = self.rows as i8;
         let cols = self.cols as i8;
 
-        if x < 0 || y < 0 || x > rows - 1 || y > cols - 1 {
+        // check board boundaries
+        if x < 0 || y < 0 || rows - 1 < x || cols - 1 < y {
             return;
         }
 
@@ -121,14 +111,17 @@ impl Game {
 
         cell.show();
 
-        // show empty neighbours
-        if cell.bombs_around() == 0 {
-            let neighbours = [0, 1, -1];
+        if cell.bombs_around() < 1 {
+            self.show_empty_neighbours(x, y);
+        }
+    }
 
-            for i in neighbours {
-                for j in neighbours {
-                    self.flood_fill((x + i, y + j));
-                }
+    fn show_empty_neighbours(&mut self, x: i8, y: i8) {
+        let neighbours = [0, 1, -1];
+
+        for i in neighbours {
+            for j in neighbours {
+                self.sweep_mine((x + i, y + j));
             }
         }
     }
@@ -145,8 +138,8 @@ impl Game {
             .unwrap_or_else(|| panic!("cell at ({}, {}) does not exist", pos.0, pos.1))
     }
 
-    fn status(&self, cell: &Cell) -> Status {
-        if self.is_lost(cell) {
+    fn status(&self) -> Status {
+        if self.has_lost {
             return Status::Lost;
         }
 
@@ -165,10 +158,6 @@ impl Game {
             .count() as i8;
 
         self.bombs as i8 - flagged_cells
-    }
-
-    fn is_lost(&self, cell: &Cell) -> bool {
-        !cell.is_flagged() && cell.is_mined() && cell.is_shown()
     }
 
     fn is_won(&self) -> bool {
@@ -240,6 +229,45 @@ mod tests {
     use super::*;
 
     #[test]
+    fn total_bombs_num_is_correct() {
+        // arrange
+        let bombs = 3;
+        let sut = Game::new(3, 3, bombs);
+
+        // act
+        let got = sut.bombs();
+
+        // assert
+        assert_eq!(bombs, got);
+    }
+
+    #[test]
+    fn rows_num_is_correct() {
+        // arrange
+        let rows = 3;
+        let sut = Game::new(rows, 3, 3);
+
+        // act
+        let got = sut.rows();
+
+        // assert
+        assert_eq!(rows, got);
+    }
+
+    #[test]
+    fn cols_num_is_correct() {
+        // arrange
+        let cols = 3;
+        let sut = Game::new(3, cols, 3);
+
+        // act
+        let got = sut.cols();
+
+        // assert
+        assert_eq!(cols, got);
+    }
+
+    #[test]
     fn cell_is_flagged() {
         // arrange
         let mut sut = Game::new(3, 3, 3);
@@ -250,6 +278,20 @@ mod tests {
         // assert
         assert_eq!(Status::InProgress(2), status);
         assert!(sut.cell((0, 0)).is_flagged());
+    }
+
+    #[test]
+    fn nothing_happens_if_an_open_cell_is_being_flagged() {
+        // arrange
+        let mut sut = Game::new(3, 3, 3);
+        sut.open((0, 0));
+
+        // act
+        let status = sut.toggle_flag((0, 0));
+
+        // assert
+        assert_eq!(Status::InProgress(3), status);
+        assert!(!sut.cell((0, 0)).is_flagged());
     }
 
     #[test]
@@ -390,8 +432,8 @@ mod tests {
     fn there_are_two_bombs_around() {
         // arrange
         let mut sut = Game::new(3, 3, 2);
-        sut.plant_bomb((0, 0)); // left top
-        sut.plant_bomb((2, 2)); // right bottom
+        sut.plant_bomb((0, 0)); // top left
+        sut.plant_bomb((2, 2)); // bottom right
 
         // act
         sut.open((1, 1));
@@ -405,9 +447,9 @@ mod tests {
     fn there_are_thee_bombs_around() {
         // arrange
         let mut sut = Game::new(3, 3, 3);
-        sut.plant_bomb((0, 0)); // left top
+        sut.plant_bomb((0, 0)); // top left
         sut.plant_bomb((0, 1)); // top center
-        sut.plant_bomb((2, 2)); // right bottom
+        sut.plant_bomb((2, 2)); // bottom right
 
         // act
         sut.open((1, 1));
@@ -421,10 +463,10 @@ mod tests {
     fn there_are_four_bombs_around() {
         // arrange
         let mut sut = Game::new(3, 3, 4);
-        sut.plant_bomb((0, 0)); // left top
+        sut.plant_bomb((0, 0)); // top left
         sut.plant_bomb((0, 1)); // top center
-        sut.plant_bomb((0, 2)); // right top
-        sut.plant_bomb((2, 2)); // right bottom
+        sut.plant_bomb((0, 2)); // top right
+        sut.plant_bomb((2, 2)); // bottom right
 
         // act
         sut.open((1, 1));
@@ -438,11 +480,11 @@ mod tests {
     fn there_are_five_bombs_around() {
         // arrange
         let mut sut = Game::new(3, 3, 5);
-        sut.plant_bomb((0, 0)); // left top
+        sut.plant_bomb((0, 0)); // top left
         sut.plant_bomb((0, 1)); // top center
-        sut.plant_bomb((0, 2)); // right top
-        sut.plant_bomb((1, 2)); // right center
-        sut.plant_bomb((2, 2)); // right bottom
+        sut.plant_bomb((0, 2)); // top right
+        sut.plant_bomb((1, 2)); // center right
+        sut.plant_bomb((2, 2)); // bottom right
 
         // act
         sut.open((1, 1));
@@ -456,12 +498,12 @@ mod tests {
     fn there_are_six_bombs_around() {
         // arrange
         let mut sut = Game::new(3, 3, 6);
-        sut.plant_bomb((0, 0)); // left top
+        sut.plant_bomb((0, 0)); // top left
         sut.plant_bomb((0, 1)); // top center
-        sut.plant_bomb((0, 2)); // right top
-        sut.plant_bomb((1, 2)); // right center
-        sut.plant_bomb((2, 1)); // bottom center
-        sut.plant_bomb((2, 2)); // right bottom
+        sut.plant_bomb((0, 2)); // top right
+        sut.plant_bomb((1, 2)); // center right
+        sut.plant_bomb((2, 1)); // center bottom
+        sut.plant_bomb((2, 2)); // bottom right
 
         // act
         sut.open((1, 1));
@@ -475,13 +517,14 @@ mod tests {
     fn there_are_seven_bombs_around() {
         // arrange
         let mut sut = Game::new(3, 3, 7);
-        sut.plant_bomb((0, 0)); // left top
+
+        sut.plant_bomb((0, 0)); // top left
         sut.plant_bomb((0, 1)); // top center
-        sut.plant_bomb((0, 2)); // right top
-        sut.plant_bomb((1, 2)); // right center
-        sut.plant_bomb((2, 0)); // left bottom
-        sut.plant_bomb((2, 1)); // bottom center
-        sut.plant_bomb((2, 2)); // right bottom
+        sut.plant_bomb((0, 2)); // top right
+        sut.plant_bomb((1, 2)); // center right
+        sut.plant_bomb((2, 0)); // bottom left
+        sut.plant_bomb((2, 1)); // center bottom
+        sut.plant_bomb((2, 2)); // bottom right
 
         // act
         sut.open((1, 1));
@@ -513,7 +556,7 @@ mod tests {
     }
 
     #[test]
-    fn show_all_empty_neighbours_when_an_empty_cell_is_open() {
+    fn empty_neighbours_are_shown_when_an_empty_cell_is_open() {
         // arrange
         let rows = 4;
         let cols = 4;

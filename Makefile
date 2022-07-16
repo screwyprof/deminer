@@ -7,6 +7,9 @@ MAKE_COLOR=\033[36m%-20s\033[0m
 
 IGNORE_COVERAGE_FOR="src/main.rs"
 
+export RUSTFLAGS=-Cinstrument-coverage
+export LLVM_PROFILE_FILE=report-%p-%m.profraw
+
 all: build lint test ## build application, run linters and tests
 
 build: ## build application
@@ -23,7 +26,7 @@ fmt: ## format code
 
 test: ## run tests
 	@echo "$(OK_COLOR)==> Running tests$(NO_COLOR)"
-	RUSTFLAGS="-Cinstrument-coverage" cargo test
+	cargo test
 
 test-cover-all: test  ## run tests with code coverage and show html report in browser
 	grcov . -s . --binary-path ./target/debug/ -t html --branch --ignore-not-existing --ignore $(IGNORE_COVERAGE_FOR) -o ./target/debug/coverage/
